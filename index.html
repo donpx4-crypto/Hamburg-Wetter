@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071525">
+  <meta name="description" content="Hamburgs Wetter als lebendige, minimalistische Kunstinstallation.">
+  <title>HAMBURG — Wetter in Bewegung</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <style>
+    /* Originalschrift von Adobe, über das öffentliche Adobe-GitHub-Repository. */
+    @font-face {
+      font-family: "Source Code Variable";
+      src: url("https://cdn.jsdelivr.net/gh/adobe-fonts/source-code-pro@release/WOFF2/VF/SourceCodeVF-Upright.ttf.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+    }
+
+    :root {
+      font-family: "Source Code Variable", monospace;
+      font-weight: 700;
+      color: #ffffff;
+      background: #071525;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 280px; min-height: 100%; }
+    body { overflow-x: hidden; }
+    button, a { font: inherit; color: #ffffff; }
+    a { text-decoration: none; }
+    a:hover, a:focus-visible { text-decoration: underline; text-underline-offset: 4px; }
+
+    .app {
+      position: relative;
+      isolation: isolate;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      min-height: 100svh;
+      overflow: hidden;
+      color: #ffffff;
+    }
+    /* Nur die Hintergründe enthalten Farbe; alle sichtbaren Elemente sind weiß. */
+    .background {
+      position: absolute;
+      z-index: -2;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      background: #071525;
+      transition: opacity 1900ms cubic-bezier(.2,.7,.2,1);
+    }
+    .background.is-visible { opacity: 1; }
+    .masthead {
+      position: absolute;
+      z-index: 5;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      padding: max(32px, env(safe-area-inset-top)) max(40px, env(safe-area-inset-right)) 0 max(40px, env(safe-area-inset-left));
+      font-size: clamp(13px, 1.15vw, 17px);
+      line-height: 1.35;
+      letter-spacing: .16em;
+    }
+    .city { margin: 0; font-size: inherit; font-weight: 700; }
+    .clock { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .clock-label { display: block; margin-bottom: 5px; font-size: 10px; letter-spacing: .20em; }
+
+    .main {
+      position: relative;
+      z-index: 2;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 106px 20px 118px;
+      text-align: center;
+    }
+    .hero {
+      position: relative;
+      flex: 0 0 auto;
+      width: min(52vw, 550px);
+      max-width: calc(100vw - 32px);
+      height: min(46vh, 430px);
+      min-height: 260px;
+      transform: translateZ(0);
+    }
+    .art {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      opacity: 0;
+      transform: translate3d(0,18px,0) scale(.96);
+      transition: opacity 1150ms ease, transform 1600ms cubic-bezier(.2,.7,.2,1);
+      will-change: opacity, transform;
+    }
+    .art svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      fill: #ffffff;
+    }
+    .app[data-weather="sun"] .art--sun,
+    .app[data-weather="rain"] .art--rain,
+    .app[data-weather="cloud"] .art--cloud,
+    .app[data-weather="snow"] .art--snow,
+    .app[data-weather="storm"] .art--storm,
+    .app[data-weather="fog"] .art--fog,
+    .app[data-weather="night"] .art--night {
+      opacity: 1;
+      transform: translate3d(0,0,0) scale(1);
+    }
+
+    /* Animationen beginnen nur für den jeweils sichtbaren Zustand. */
+    .sun-rays, .sun-disc, .cloud-shape, .cloud-secondary, .big-flake,
+    .fog-strip, .star, .drop-symbol {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation-play-state: paused !important;
+    }
+    .sun-rays { animation: revolve 90s linear infinite; }
+    .sun-disc { animation: breathe 7s ease-in-out infinite; }
+    .cloud-shape { animation: cloud-sway 18s ease-in-out infinite alternate; }
+    .cloud-secondary { animation: cloud-sway 26s ease-in-out infinite alternate-reverse; }
+    .big-flake { animation: revolve 100s linear infinite; }
+    .fog-strip:nth-child(1) { animation: fog-drift 15s ease-in-out infinite alternate; }
+    .fog-strip:nth-child(2) { animation: fog-drift 21s ease-in-out infinite alternate-reverse; }
+    .fog-strip:nth-child(3) { animation: fog-drift 24s ease-in-out infinite alternate; }
+    .fog-strip:nth-child(4) { animation: fog-drift 19s ease-in-out infinite alternate-reverse; }
+    .star:nth-child(2n) { animation: twinkle 5s ease-in-out infinite; }
+    .star:nth-child(2n+1) { animation: twinkle 7s ease-in-out -2s infinite; }
+    .drop-symbol:nth-child(2n) { animation: droplet-bob 5.5s ease-in-out infinite; }
+    .drop-symbol:nth-child(2n+1) { animation: droplet-bob 7s ease-in-out -2s infinite; }
+
+    .app[data-weather="sun"] .sun-rays, .app[data-weather="sun"] .sun-disc,
+    .app[data-weather="cloud"] .cloud-shape, .app[data-weather="cloud"] .cloud-secondary,
+    .app[data-weather="snow"] .big-flake,
+    .app[data-weather="fog"] .fog-strip,
+    .app[data-weather="night"] .star,
+    .app[data-weather="rain"] .drop-symbol { animation-play-state: running !important; }
+
+    /* Partikel bewegen sich ausschließlich über compositor-freundliche Transforms. */
+    .particle-field {
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 1300ms ease;
+    }
+    .app[data-weather="rain"] .particle-field--rain,
+    .app[data-weather="storm"] .particle-field--rain,
+    .app[data-weather="snow"] .particle-field--snow { opacity: 1; }
+    .particle {
+      position: absolute;
+      top: -12vh;
+      left: var(--x);
+      display: block;
+      width: var(--size);
+      height: var(--length);
+      background: #ffffff;
+      opacity: var(--alpha);
+      will-change: transform;
+      animation: particle-fall var(--speed) linear var(--delay) infinite paused;
+    }
+    .particle--rain { border-radius: 100% 100% 100% 100%; transform: rotate(9deg); }
+    .particle--snow { height: var(--size); border-radius: 50%; }
+    .app[data-weather="rain"] .particle--rain,
+    .app[data-weather="storm"] .particle--rain,
+    .app[data-weather="snow"] .particle--snow { animation-play-state: running; }
+    .particle--extra { display: none; }
+    .particle-field--rain.is-heavy .particle--extra,
+    .particle-field--snow.is-heavy .particle--extra { display: block; }
+    .flash {
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+      pointer-events: none;
+      background: #ffffff;
+      opacity: 0;
+      animation: lightning 9.5s linear infinite paused;
+    }
+    .app[data-weather="storm"] .flash { animation-play-state: running; }
+
+    .reading {
+      position: relative;
+      z-index: 3;
+      margin-top: 23px;
+      min-height: 142px;
+      transition: opacity 600ms ease, transform 600ms ease;
+    }
+    .temp {
+      font-size: clamp(75px, 9vw, 126px);
+      letter-spacing: -.105em;
+      line-height: 1.08;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .description {
+      margin-top: 14px;
+      font-size: clamp(12px, 1.25vw, 16px);
+      line-height: 1.6;
+      letter-spacing: .20em;
+      text-transform: uppercase;
+    }
+    .app[data-weather="loading"] .reading { opacity: 0; transform: translateY(8px); }
+    .notice {
+      position: relative;
+      z-index: 3;
+      max-width: 600px;
+      margin-top: 13px;
+      font-size: 11px;
+      line-height: 1.65;
+      letter-spacing: .09em;
+    }
+    .notice[hidden], .retry[hidden] { display: none; }
+    .retry {
+      margin-top: 14px;
+      padding: 5px 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 5px;
+    }
+    .retry:focus-visible { text-decoration-thickness: 3px; }
+    .loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      opacity: 0;
+      transition: opacity 500ms ease;
+      pointer-events: none;
+    }
+    .app[data-weather="loading"] .loading { opacity: 1; }
+    .loading i { display: block; width: 10px; height: 44px; background: #ffffff; animation: loader 1.2s ease-in-out infinite; }
+    .loading i:nth-child(2) { animation-delay: .15s; }
+    .loading i:nth-child(3) { animation-delay: .3s; }
+
+    .footer {
+      position: absolute;
+      z-index: 5;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: end;
+      gap: 18px;
+      padding: 0 max(40px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(40px, env(safe-area-inset-left));
+      font-size: 10px;
+      line-height: 1.6;
+      letter-spacing: .10em;
+      text-transform: uppercase;
+    }
+    .footer-live { text-align: center; white-space: nowrap; }
+    .footer-credit { text-align: right; white-space: nowrap; }
+
+    @keyframes revolve { to { transform: rotate(360deg); } }
+    @keyframes breathe { 50% { transform: scale(1.055); } }
+    @keyframes cloud-sway { from { transform: translateX(-17px); } to { transform: translateX(17px); } }
+    @keyframes fog-drift { from { transform: translateX(-22px); } to { transform: translateX(22px); } }
+    @keyframes twinkle { 0%, 100% { opacity: .45; transform: scale(.88); } 50% { opacity: 1; transform: scale(1.12); } }
+    @keyframes droplet-bob { 50% { transform: translateY(-10px); } }
+    @keyframes particle-fall {
+      from { transform: translate3d(0,-18vh,0); }
+      to { transform: translate3d(var(--drift),125vh,0); }
+    }
+    @keyframes lightning {
+      0%, 42%, 44%, 46%, 47%, 100% { opacity: 0; }
+      42.3%, 45.2% { opacity: .13; }
+    }
+    @keyframes loader { 0%, 100% { transform: scaleY(.42); opacity: .55; } 50% { transform: scaleY(1); opacity: 1; } }
+
+    @media (max-width: 700px) {
+      .masthead { padding: max(26px, env(safe-area-inset-top)) 24px 0; font-size: 13px; }
+      .clock-label { font-size: 9px; }
+      .main { padding: 94px 20px 120px; }
+      .hero { width: min(96vw, 455px); height: min(39vh, 370px); min-height: 230px; }
+      .reading { min-height: 120px; margin-top: 12px; }
+      .temp { font-size: clamp(70px, 17vw, 110px); }
+      .description { margin-top: 12px; font-size: 12px; }
+      .footer { grid-template-columns: 1fr; gap: 3px; padding: 0 15px max(22px, env(safe-area-inset-bottom)); text-align: center; font-size: 9px; }
+      .footer-live { order: -1; }
+      .footer-credit { text-align: center; }
+    }
+    @media (max-height: 640px) {
+      .main { padding-top: 75px; padding-bottom: 66px; }
+      .hero { height: min(41vh, 245px); min-height: 165px; }
+      .temp { font-size: clamp(58px, 12vh, 86px); }
+      .description { margin-top: 4px; }
+      .reading { min-height: 95px; }
+      .footer { padding-bottom: 12px; }
+      .masthead { padding-top: 15px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .particle-field, .flash { display: none !important; }
+      .loading i { transform: scaleY(.75); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app" data-weather="loading">
+    <div class="background is-visible" id="bgA" aria-hidden="true"></div>
+    <div class="background" id="bgB" aria-hidden="true"></div>
+
+    <header class="masthead">
+      <h1 class="city">HAMBURG</h1>
+      <div class="clock" aria-label="Aktuelle Uhrzeit in Hamburg">
+        <span class="clock-label">ORTSZEIT</span>
+        <time id="clock">--:--:--</time>
+      </div>
+    </header>
+
+    <!-- Regen und Schnee überlagern als unaufdringliche Hintergrundpartikel die Bühne. -->
+    <div class="particle-field particle-field--rain" id="rainField" aria-hidden="true"></div>
+    <div class="particle-field particle-field--snow" id="snowField" aria-hidden="true"></div>
+    <div class="flash" aria-hidden="true"></div>
+
+    <main class="main">
+      <div class="hero" aria-hidden="true">
+        <!-- Sonne: weiße Kreisfläche und acht rotierende, gefüllte Strahlen. -->
+        <div class="art art--sun">
+          <svg viewBox="0 0 480 420" role="presentation">
+            <g class="sun-rays">
+              <rect x="233" y="20" width="14" height="62" rx="7"/>
+              <rect x="233" y="20" width="14" height="62" rx="7" transform="rotate(45 240 210)"/>
+              <rect x="233" y="20" width="14" height="62" rx="7" transform="rotate(90 240 210)"/>
+              <rect x="233" y="20" width="14" height="62" rx="7" transform="rotate(135 240 210)"/>
+              <rect x="233" y="20" width="14" height="62" rx="7" transform="rotate(180 240 210)"/>
+              <rect x="233" y="20" width="14" height="62" rx="7" transform="rotate(225 240 210)"/>
+              <rect x="233" y="20" width="14" height="62" rx="7" transform="rotate(270 240 210)"/>
+              <rect x="233" y="20" width="14" height="62" rx="7" transform="rotate(315 240 210)"/>
+            </g>
+            <circle class="sun-disc" cx="240" cy="210" r="94"/>
+          </svg>
+        </div>
+
+        <!-- Regen: drei große, weiße Tropfensilhouetten. -->
+        <div class="art art--rain">
+          <svg viewBox="0 0 480 420" role="presentation">
+            <g class="drop-symbol">
+              <path d="M240 35C210 81 156 149 156 213a84 84 0 0 0 168 0c0-64-54-132-84-178Z"/>
+            </g>
+            <g class="drop-symbol">
+              <path d="M96 197c-19 29-49 70-49 107a49 49 0 0 0 98 0c0-37-30-78-49-107Z"/>
+            </g>
+            <g class="drop-symbol">
+              <path d="M386 197c-19 29-49 70-49 107a49 49 0 0 0 98 0c0-37-30-78-49-107Z"/>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Wolken: reine, überlappende Flächen ohne Konturlinien. -->
+        <div class="art art--cloud">
+          <svg viewBox="0 0 480 420" role="presentation">
+            <g class="cloud-secondary" opacity=".34">
+              <circle cx="350" cy="126" r="52"/><circle cx="404" cy="150" r="39"/>
+              <rect x="306" y="143" width="138" height="45" rx="22"/>
+            </g>
+            <g class="cloud-shape">
+              <circle cx="161" cy="228" r="69"/><circle cx="263" cy="180" r="107"/>
+              <circle cx="366" cy="231" r="67"/><rect x="92" y="219" width="341" height="80" rx="40"/>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Schneeflocke: ausschließlich gefüllte geometrische Segmente. -->
+        <div class="art art--snow">
+          <svg viewBox="0 0 480 420" role="presentation">
+            <defs>
+              <g id="snowArm">
+                <rect x="-7" y="-141" width="14" height="118" rx="7"/>
+                <rect x="-7" y="-115" width="14" height="56" rx="7" transform="rotate(46 0 -107)"/>
+                <rect x="-7" y="-115" width="14" height="56" rx="7" transform="rotate(-46 0 -107)"/>
+              </g>
+            </defs>
+            <g transform="translate(240 210)">
+              <g class="big-flake">
+                <use href="#snowArm" transform="rotate(0)"/>
+                <use href="#snowArm" transform="rotate(60)"/>
+                <use href="#snowArm" transform="rotate(120)"/>
+                <use href="#snowArm" transform="rotate(180)"/>
+                <use href="#snowArm" transform="rotate(240)"/>
+                <use href="#snowArm" transform="rotate(300)"/>
+                <circle r="19"/>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Gewitter: separate weiße Wolken- und Blitzsilhouette. -->
+        <div class="art art--storm">
+          <svg viewBox="0 0 480 420" role="presentation">
+            <circle cx="145" cy="187" r="60"/><circle cx="242" cy="145" r="91"/>
+            <circle cx="340" cy="189" r="59"/>
+            <rect x="85" y="180" width="315" height="75" rx="37"/>
+            <path d="M247 238 194 320h54l-18 85 105-122h-62l27-45Z"/>
+          </svg>
+        </div>
+
+        <!-- Nebel: weiche, gleichmäßig weiße Bänder mit Transparenz. -->
+        <div class="art art--fog">
+          <svg viewBox="0 0 480 420" role="presentation">
+            <g class="fog-strip" opacity=".94"><rect x="51" y="96" width="331" height="39" rx="19.5"/></g>
+            <g class="fog-strip" opacity=".66"><rect x="104" y="158" width="343" height="44" rx="22"/></g>
+            <g class="fog-strip" opacity=".90"><rect x="32" y="230" width="345" height="43" rx="21.5"/></g>
+            <g class="fog-strip" opacity=".56"><rect x="127" y="300" width="304" height="35" rx="17.5"/></g>
+          </svg>
+        </div>
+
+        <!-- Halbmond: transparente Aussparung per SVG-Maske, keinerlei dunkle Füllung sichtbar. -->
+        <div class="art art--night">
+          <svg viewBox="0 0 480 420" role="presentation">
+            <defs>
+              <mask id="crescentMask" maskUnits="userSpaceOnUse" x="65" y="20" width="350" height="360">
+                <rect x="65" y="20" width="350" height="360" fill="#ffffff"/>
+                <circle cx="306" cy="139" r="115" fill="#000000"/>
+              </mask>
+            </defs>
+            <circle cx="240" cy="210" r="127" mask="url(#crescentMask)"/>
+            <g class="star"><path d="M95 97 101 114 118 120 101 126 95 143 89 126 72 120 89 114Z"/></g>
+            <g class="star"><path d="M387 95 393 110 408 116 393 122 387 137 381 122 366 116 381 110Z"/></g>
+            <g class="star"><path d="M386 300 391 312 403 317 391 322 386 334 381 322 369 317 381 312Z"/></g>
+            <circle class="star" cx="117" cy="313" r="5"/>
+            <circle class="star" cx="336" cy="54" r="4"/>
+          </svg>
+        </div>
+
+        <!-- Ladeanzeige: drei weiße Flächen statt eines Outlinespinners. -->
+        <div class="loading" aria-hidden="true"><i></i><i></i><i></i></div>
+      </div>
+
+      <div class="reading" id="reading" role="status" aria-live="polite" aria-atomic="true">
+        <div class="temp" id="temperature">—</div>
+        <div class="description" id="description">WETTER WIRD GELADEN</div>
+      </div>
+      <div class="notice" id="notice" role="status" hidden></div>
+      <button class="retry" id="retry" type="button" hidden>ERNEUT VERSUCHEN</button>
+    </main>
+
+    <footer class="footer">
+      <span id="updated">WARTE AUF WETTERDATEN</span>
+      <span class="footer-live" id="liveLabel">LIVE-WETTER · HAMBURG</span>
+      <span class="footer-credit">DATEN: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">OPEN-METEO</a></span>
+    </footer>
+  </div>
+
+  <script>
+    "use strict";
+
+    // API-Dokumentation: https://open-meteo.com/en/docs
+    const API_URL = new URL("https://api.open-meteo.com/v1/forecast");
+    API_URL.search = new URLSearchParams({
+      latitude: "53.55",
+      longitude: "10.00",
+      timezone: "Europe/Berlin",
+      temperature_unit: "celsius",
+      current: "temperature_2m,weather_code,is_day,precipitation,rain,showers,snowfall"
+    }).toString();
+
+    const REFRESH_MS = 10 * 60 * 1000;
+    const RETRY_MS = 60 * 1000;
+    const REQUEST_TIMEOUT_MS = 12000;
+    const CLOCK = new Intl.DateTimeFormat("de-DE", {
+      timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit",
+      second: "2-digit", hourCycle: "h23"
+    });
+    const SHORT_TIME = new Intl.DateTimeFormat("de-DE", {
+      timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    });
+
+    const BACKGROUNDS = {
+      loading: "radial-gradient(ellipse at 50% 42%, #1a314b, #071525 82%)",
+      sun:     "radial-gradient(ellipse at 50% 43%, #ff8c00 0%, #ba5b00 52%, #803500 100%)",
+      rain:    "radial-gradient(ellipse at 50% 43%, #1b3b61 0%, #0d223b 55%, #071525 100%)",
+      cloud:   "radial-gradient(ellipse at 50% 44%, #718796 0%, #556d7c 56%, #3e5360 100%)",
+      snow:    "radial-gradient(ellipse at 50% 43%, #80a9bb 0%, #527c96 50%, #2c506b 100%)",
+      storm:   "radial-gradient(ellipse at 50% 44%, #293550 0%, #111827 67%, #090e1a 100%)",
+      fog:     "radial-gradient(ellipse at 50% 44%, #91a6b0 0%, #657d8b 53%, #455c68 100%)",
+      night:   "radial-gradient(ellipse at 50% 42%, #182b50 0%, #0b1530 58%, #050b1d 100%)"
+    };
+    const DESCRIPTIONS = {
+      sun: "Sonnig", rain: "Regen", cloud: "Bewölkt", snow: "Schnee",
+      storm: "Gewitter", fog: "Nebel", night: "Klare Nacht"
+    };
+    const WMO = {
+      thunder: new Set([95, 96, 97, 99]),
+      snow: new Set([71, 73, 75, 77, 85, 86]),
+      rain: new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82]),
+      fog: new Set([45, 48]),
+      cloud: new Set([2, 3]),
+      clear: new Set([0, 1])
+    };
+
+    const app = document.getElementById("app");
+    const bgA = document.getElementById("bgA");
+    const bgB = document.getElementById("bgB");
+    const rainField = document.getElementById("rainField");
+    const snowField = document.getElementById("snowField");
+    const tempEl = document.getElementById("temperature");
+    const descriptionEl = document.getElementById("description");
+    const updatedEl = document.getElementById("updated");
+    const noticeEl = document.getElementById("notice");
+    const retryEl = document.getElementById("retry");
+    const liveLabel = document.getElementById("liveLabel");
+
+    let activeBackground = bgA;
+    let currentScene = "loading";
+    let hasLiveData = false;
+    let lastSuccessfulFetch = 0;
+    let fetching = false;
+    let retryTimer = null;
+
+    bgA.style.background = BACKGROUNDS.loading;
+    document.getElementById("clock").textContent = CLOCK.format(new Date());
+    setInterval(() => {
+      document.getElementById("clock").textContent = CLOCK.format(new Date());
+    }, 1000);
+
+    // Stabiler, reproduzierbarer Zufall für gleichmäßige Partikelverteilung.
+    let seed = 12087;
+    function random() {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 4294967296;
+    }
+    function addParticles(field, type, count, standardCount) {
+      const fragment = document.createDocumentFragment();
+      for (let i = 0; i < count; i++) {
+        const particle = document.createElement("span");
+        particle.className = `particle particle--${type}${i >= standardCount ? " particle--extra" : ""}`;
+        const size = type === "rain" ? 2 + random() * 2 : 3 + random() * 7;
+        particle.style.setProperty("--x", `${(random() * 100).toFixed(2)}%`);
+        particle.style.setProperty("--size", `${size.toFixed(1)}px`);
+        particle.style.setProperty("--length", `${type === "rain" ? (11 + random() * 19).toFixed(1) : size.toFixed(1)}px`);
+        particle.style.setProperty("--speed", `${(type === "rain" ? 1.8 + random() * 1.8 : 9 + random() * 12).toFixed(2)}s`);
+        particle.style.setProperty("--delay", `${(-random() * 25).toFixed(2)}s`);
+        particle.style.setProperty("--drift", `${(type === "rain" ? -10 + random() * 18 : -85 + random() * 170).toFixed(0)}px`);
+        particle.style.setProperty("--alpha", `${(.32 + random() * .52).toFixed(2)}`);
+        fragment.appendChild(particle);
+      }
+      field.appendChild(fragment);
+    }
+    addParticles(rainField, "rain", 96, 44);
+    addParticles(snowField, "snow", 64, 34);
+
+    function classifyWeather(data) {
+      const code = data.weather_code;
+      const day = data.is_day === 1;
+      const totalRain = (data.rain || 0) + (data.showers || 0);
+      // Reihenfolge: Gewitter > Schnee > Regen > Nebel > Wolken > klarer Himmel.
+      let scene;
+      if (WMO.thunder.has(code)) scene = "storm";
+      else if (WMO.snow.has(code)) scene = "snow";
+      else if (WMO.rain.has(code)) scene = "rain";
+      else if (WMO.fog.has(code)) scene = "fog";
+      else if ((data.snowfall || 0) > 0.1) scene = "snow";
+      else if (totalRain > 0.25) scene = "rain";
+      else if (WMO.cloud.has(code)) scene = "cloud";
+      else scene = day ? "sun" : "night";
+
+      const heavyRain = [55, 57, 65, 67, 82, 97, 99].includes(code) ||
+        (data.precipitation || 0) >= 2;
+      const heavySnow = [75, 86].includes(code) || (data.snowfall || 0) >= 1;
+      return { scene, heavyRain, heavySnow };
+    }
+
+    function setScene(scene) {
+      if (scene === currentScene) return;
+      const nextBackground = activeBackground === bgA ? bgB : bgA;
+      nextBackground.style.background = BACKGROUNDS[scene] || BACKGROUNDS.loading;
+      // Force a style flush only for background crossfades (not every animation frame).
+      void nextBackground.offsetWidth;
+      nextBackground.classList.add("is-visible");
+      activeBackground.classList.remove("is-visible");
+      activeBackground = nextBackground;
+      currentScene = scene;
+      app.dataset.weather = scene;
+      document.querySelector('meta[name="theme-color"]')
+        .setAttribute("content", scene === "sun" ? "#ba5b00" : "#071525");
+    }
+
+    function setNotice(message) {
+      noticeEl.textContent = message;
+      noticeEl.hidden = !message;
+    }
+
+    function showWeather(data) {
+      const { scene, heavyRain, heavySnow } = classifyWeather(data);
+      rainField.classList.toggle("is-heavy", heavyRain);
+      snowField.classList.toggle("is-heavy", heavySnow);
+      tempEl.textContent = `${Math.round(data.temperature_2m)}°`;
+      descriptionEl.textContent = DESCRIPTIONS[scene];
+      updatedEl.textContent = `AKTUALISIERT ${SHORT_TIME.format(new Date())}`;
+      setNotice("");
+      retryEl.hidden = true;
+      setScene(scene);
+      hasLiveData = true;
+      lastSuccessfulFetch = Date.now();
+    }
+
+    function handleError() {
+      if (!hasLiveData) {
+        tempEl.textContent = "—";
+        descriptionEl.textContent = "WETTER NICHT VERFÜGBAR";
+        updatedEl.textContent = "KEINE LIVE-DATEN";
+        retryEl.hidden = false;
+        setScene("night");
+        setNotice("VERBINDUNG ZUR WETTER-API FEHLGESCHLAGEN");
+      } else {
+        setNotice("VERBINDUNG UNTERBROCHEN · LETZTE VERFÜGBARE DATEN");
+        updatedEl.textContent = `LETZTES UPDATE ${SHORT_TIME.format(new Date(lastSuccessfulFetch))}`;
+        retryEl.hidden = false;
+      }
+      // Zusätzlich zum normalen 10-Minuten-Takt schneller erneut versuchen.
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(fetchWeather, RETRY_MS);
+    }
+
+    async function fetchWeather() {
+      if (fetching) return;
+      fetching = true;
+      clearTimeout(retryTimer);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const response = await fetch(API_URL.toString(), {
+          signal: controller.signal,
+          cache: "no-store"
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await response.json();
+        const data = json.current;
+        if (!data || !Number.isFinite(data.temperature_2m) ||
+            !Number.isInteger(data.weather_code) ||
+            ![0, 1].includes(data.is_day)) {
+          throw new Error("Ungültige Wetterdaten");
+        }
+        showWeather(data);
+      } catch (error) {
+        console.warn("Open-Meteo konnte nicht geladen werden:", error);
+        handleError();
+      } finally {
+        clearTimeout(timeout);
+        fetching = false;
+      }
+    }
+
+    retryEl.addEventListener("click", fetchWeather);
+    window.addEventListener("online", fetchWeather);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && Date.now() - lastSuccessfulFetch >= REFRESH_MS) fetchWeather();
+    });
+
+    // Nur für die Entwicklung: ?demo=sun|rain|cloud|snow|storm|fog|night
+    // Ohne diesen URL-Parameter ist ausschließlich der echte API-Betrieb aktiv.
+    const demo = new URLSearchParams(window.location.search).get("demo");
+    if (Object.hasOwn(DESCRIPTIONS, demo)) {
+      liveLabel.textContent = "DEMO · KEINE LIVE-DATEN";
+      updatedEl.textContent = "TESTMODUS AKTIV";
+      tempEl.textContent = "18°";
+      descriptionEl.textContent = DESCRIPTIONS[demo];
+      rainField.classList.add("is-heavy");
+      snowField.classList.add("is-heavy");
+      setScene(demo);
+    } else {
+      fetchWeather();
+      setInterval(fetchWeather, REFRESH_MS);
+    }
+  </script>
+</body>
+</html>
